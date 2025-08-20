@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Protótipo: Fala → Texto → VLibras</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --card: #121a2b;
+      --muted: #96a1b3;
+      --accent: #1f6feb;
+      --good: #1db954;
+      --bad: #e5534b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
+      background: linear-gradient(180deg, #0b1220 0%, #0e1627 100%);
+      color: #e6eefc;
+    }
+    header { padding: 24px 16px; text-align: center; }
+    header h1 { margin: 0 0 4px; font-size: 1.6rem; }
+    header p { margin: 0; color: var(--muted); }
+
+    .wrap { max-width: 1000px; margin: 0 auto; padding: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+
+    .card { background: var(--card); border: 1px solid #1c2540; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+    .card .inner { padding: 16px; }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    button {
+      border: 0; border-radius: 999px; padding: 10px 16px; font-weight: 600; cursor: pointer;
+      background: #182446; color: #e6eefc; transition: transform .05s ease, opacity .2s ease; opacity: .95;
+    }
+    button:hover { opacity: 1; }
+    button:active { transform: translateY(1px); }
+    .start { background: var(--good); color: #08121e; }
+    .stop { background: var(--bad); }
+    .refresh { background: var(--accent); }
+
+    .status { margin-left: auto; color: var(--muted); font-size: .95rem; }
+
+    .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+
+    .panel-title { margin: 0 0 8px; font-size: 1rem; color: #c7d2e6; }
+
+    #transcricao, #texto-a-traduzir {
+      min-height: 180px; border: 1px solid #203056; border-radius: 12px; padding: 12px; background: #0d1527; line-height: 1.6;
+      white-space: pre-wrap; overflow-wrap: anywhere;
+    }
+
+    .hint { color: var(--muted); font-size: .95rem; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: #0b1326; border: 1px solid #1e2a4a; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Protótipo: Fala → Texto → VLibras</h1>
+    <p>Capture a sua fala, gere o texto automaticamente e use o VLibras para traduzir o conteúdo em Libras.</p>
+  </header>
+
+  <main class="wrap grid">
+    <section class="card">
+      <div class="inner">
+        <div class="controls">
+          <button id="btnStart" class="start">▶ Iniciar captura</button>
+          <button id="btnStop" class="stop" disabled>■ Parar</button>
+          <button id="btnForcar" class="refresh" title="Força a reindexação do VLibras no texto">↻ Recarregar texto</button>
+          <div class="status" id="status">Pronto</div>
+        </div>
+        <p class="hint" style="margin-top:8px">Dica: o reconhecimento de fala funciona melhor no <span class="kbd">Chrome</span> ou <span class="kbd">Edge</span> em <span class="kbd">https://</span> ou <span class="kbd">localhost</span>. Idioma: pt-BR.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="inner">
+        <h3 class="panel-title">Transcrição em tempo real</h3>
+        <div id="transcricao" aria-live="polite" aria-label="Transcrição da fala" role="region"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="inner">
+        <h3 class="panel-title">Texto a ser traduzido pelo VLibras</h3>
+        <div id="texto-a-traduzir" role="article">Fale algo e clique no botão do VLibras (ícone flutuante) para traduzir este conteúdo.</div>
+        <p class="hint" style="margin-top:8px">O VLibras identifica mudanças no conteúdo desta área. Você pode clicar no botão azul flutuante do VLibras (lado direito) para iniciar a tradução.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Marcadores do VLibras (widget oficial) -->
+  <div vw class="enabled">
+    <div vw-access-button class="active"></div>
+    <div vw-plugin-wrapper>
+      <div class="vw-plugin-top-wrapper"></div>
+    </div>
+  </div>
+
+  <!-- Script do VLibras -->
+  <script src="https://vlibras.gov.br/app/vlibras-plugin.js"></script>
+  <script>
+    // Inicializa o widget VLibras
+    document.addEventListener('DOMContentLoaded', function () {
+      try {
+        new window.VLibras.Widget('https://vlibras.gov.br/app');
+      } catch (e) {
+        console.warn('VLibras não pôde ser carregado agora.', e);
+      }
+    });
+  </script>
+
+  <!-- Reconhecimento de fala (Web Speech API) -->
+  <script>
+    (function(){
+      const Status = {
+        set(t){ document.getElementById('status').textContent = t; }
+      };
+
+      const transcricaoEl = document.getElementById('transcricao');
+      const destinoEl = document.getElementById('texto-a-traduzir');
+      const btnStart = document.getElementById('btnStart');
+      const btnStop = document.getElementById('btnStop');
+      const btnForcar = document.getElementById('btnForcar');
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        Status.set('Seu navegador não suporta Web Speech API. Use Chrome/Edge ou rode em localhost/https.');
+        btnStart.disabled = true;
+        return;
+      }
+
+      let recognition = null;
+      let textoFinal = '';
+
+      function criarRecognizer(){
+        const r = new SpeechRecognition();
+        r.lang = 'pt-BR';
+        r.continuous = true;           // manter ouvindo
+        r.interimResults = true;       // resultados parciais em tempo real
+
+        r.onstart = () => { Status.set('Ouvindo… fale à vontade.'); btnStart.disabled = true; btnStop.disabled = false; };
+        r.onend = ()   => { Status.set('Captura pausada.'); btnStart.disabled = false; btnStop.disabled = true; };
+        r.onerror = (ev) => { Status.set('Erro: ' + (ev.error || 'desconhecido')); };
+
+        r.onresult = (event) => {
+          let parcial = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const res = event.results[i];
+            if (res.isFinal) {
+              textoFinal += (textoFinal ? ' ' : '') + res[0].transcript.trim();
+            } else {
+              parcial += res[0].transcript;
+            }
+          }
+          const combinado = (textoFinal + (parcial ? ' ' + parcial : '')).trim();
+          transcricaoEl.textContent = combinado;
+          destinoEl.textContent = combinado || 'Fale algo e clique no botão do VLibras (ícone flutuante) para traduzir este conteúdo.';
+        };
+        return r;
+      }
+
+      recognition = criarRecognizer();
+
+      btnStart.addEventListener('click', () => {
+        textoFinal = '';
+        transcricaoEl.textContent = '';
+        destinoEl.textContent = '…';
+        try { recognition.start(); } catch (_) { /* já iniciou */ }
+      });
+
+      btnStop.addEventListener('click', () => {
+        try { recognition.stop(); } catch (_) {}
+      });
+
+      // Força reindexação do VLibras (útil quando o widget demora a notar mudanças)
+      btnForcar.addEventListener('click', () => {
+        const atual = destinoEl.textContent;
+        destinoEl.textContent = '';
+        // pequena pausa para garantir mutação no DOM
+        setTimeout(() => { destinoEl.textContent = atual; }, 0);
+      });
+    })();
+  </script>
+</body>
+</html>
