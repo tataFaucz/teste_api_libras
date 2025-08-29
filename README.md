@@ -30,10 +30,6 @@ Este projeto é um protótipo web que permite capturar sua fala, transcrever aut
 - **JavaScript (Web Speech API)**
 - **VLibras Widget Oficial**
 
-## Captura de tela
-
-![Protótipo Fala → Texto → VLibras](https://vlibras.gov.br/assets/img/vlibras.png)
-
 ## Licença
 
 Este projeto é apenas um protótipo educacional e utiliza o widget oficial do VLibras.
